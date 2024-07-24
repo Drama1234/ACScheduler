@@ -77,6 +77,7 @@ def train_distributed_actor_critic(env, agent, gamma=0.99, num_episodes=1000, ti
         while not done:
             actions = []
             
+            
 
         while not done:
             #计算策略网络（actor network）和值函数网络（critic network）的梯度

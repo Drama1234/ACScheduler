@@ -1,16 +1,15 @@
 from collections import deque
 
 class CloudEdgeEnv:
-    def __init__(self,cloud_masters,edge_masters,tasks, dependencies):
+    def __init__(self,cloud_masters,edge_masters,tasks,dependencies):
         self.cloud_masters = cloud_masters
         self.edge_masters = edge_masters
         self.tasks = tasks
-        self.dependencies = self.build_dependencies(dependencies)
+        self.dependencies = dependencies
         self.completed_tasks = set()
         self.pending_tasks = deque(tasks.values())
         self.time = 0
         self.state = self.get_initial_state()
-
     def get_initial_state(self):
         state = {
             'task_status':{task.task_id:{'completed':False,'progress':0.0,'estimated_completion':None} for task in self.tasks.values()},
@@ -40,17 +39,25 @@ class CloudEdgeEnv:
                 'load':worker.host.get_resource_utilization()})
         return resource_state
     
-    def can_schedule(self,task,completed_tasks):
-        # 检查该任务的所有oarent是否已经完成
-        for parent in task.parents:
-            if parent.task_id not in completed_tasks:
+    def can_schedule(self,task):
+        # 检查该任务的所有parent是否已经完成
+        for parent_id in task.parents:
+            if parent_id not in self.completed_tasks:
+                return False
+        # 检查任务的输入文件是否都已到达
+        for input_file in task.inputs:
+            if input_file.host_id is None:
                 return False
         return True
     
     def get_state(self):
         return{
-            'task_queue':self.pending_tasks,
+            'task_status': self.state['task_status'],
             'resource_state': self.get_resource_state(),
+            'workflow_dependencies': self.dependencies,
+            'schedulable_tasks': [task for task in self.tasks.values() if self.can_schedule(task)],
+            'current_time': self.time,
+            'task_times': self.state['task_times'],
             'task_history': self.state['task_history']
         }
 
@@ -63,16 +70,17 @@ class CloudEdgeEnv:
             if allocated:
                 self.pending_tasks.remove(task)
                 self.completed_tasks.add(task.task_id)
+                self.state['task_status'][task.task_id]['completed'] = True
                 self.state['task_history'].append((task.task_id, docker.container_id, node.node_id))
-                reward += -self.calculate_cost(task, node)
+                rewards += -self.calculate_tasktime(task, node)
             else:
-                rewards -= 100  # 分配失败，给予大惩罚
+                rewards = -100  # 分配失败，给予大惩罚
 
-        self.time+=1
+        self.time += 1
         next_state = self.get_state()
         done = len(self.pending_tasks) == 0
         return next_state, rewards, done
-    def calculate_makespan(self, task, node):
+    def calculate_tasktime(self, task, node):
         # 计算任务的完工时间
         input_time = sum([input_file.size / node.host.get_bandwidth(input_file.host_id) for input_file in task.inputs])
         output_time = sum([output_file.size / node.host.get_bandwidth(output_file.host_id) for output_file in task.outputs])

@@ -55,6 +55,7 @@ class Node:
         self.host = host 
         self.containers = []  # Containers running on this node
         self.pods = []
+        
     def allocate_resources(self, container):
         if self.can_allocate(container):
             self.host.cpu -= container.cpu

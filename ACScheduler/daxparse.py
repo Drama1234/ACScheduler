@@ -2,11 +2,6 @@ from lxml import etree
 import os
 from task.task import *
 
-class File:
-    def __init__(self, file_name, size):
-        self.file_name = file_name
-        self.size = size
-        self.host_id = None # Host ID to be assigned dynamically
         
 class WorkflowParser:
     def __init__(self, dax_file):
@@ -22,8 +17,6 @@ class WorkflowParser:
                 file_content = file.read()
 
             tree = etree.fromstring(file_content)
-            tasks = {}
-            dependencies = []
 
             # Print the root tag to ensure the file is parsed correctly
             print(f"Root tag: {tree.tag}")
@@ -33,17 +26,8 @@ class WorkflowParser:
                 name = job.get('name')
                 runtime = float(job.get('runtime'))
                 
-                inputs = []
-                for file in job.findall('users[@link="input"]'):
-                    file_name = file.get('file')
-                    size = int(file.get('size'))
-                    inputs.append(File(file_name,size))
-
-                outputs = []
-                for file in job.findall('uses[@link="output"]'):
-                    file_name = file.get('file')
-                    size = int(file.get('size'))
-                    outputs.append(File(file_name,size))
+                inputs = [{'filename': file.get('file'), 'size': int(file.get('size')), 'source_host_id': None, 'target_host_id': None} for file in job.findall('uses[@link="input"]')]
+                outputs = [{'filename': file.get('file'), 'size': int(file.get('size')), 'source_host_id': None, 'target_host_id': None} for file in job.findall('uses[@link="output"]')]
 
                 self.tasks[task_id] = Task(task_id, name, runtime, inputs, outputs)
 
@@ -61,13 +45,10 @@ class WorkflowParser:
                 #Debug: Print dependency details
                 print(f"Parsed dependency: parent={parent_id}, child={child_id}")
 
-            return tasks,dependencies
         except etree.XMLSyntaxError as e:
             raise ValueError(f"Error parsing the DAX file: {e}")
-    
     def get_tasks(self):
         return self.tasks
-    
     def get_dependencies(self):
         return self.dependencies
 
